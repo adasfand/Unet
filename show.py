@@ -1,5 +1,5 @@
 from dataset import *
-
+import matplotlib.pyplot as plt
 # 该函数是展示测试集里面的图片以及对应的mask
 def display_image_grid(images_filenames, images_directory, masks_directory, predicted_masks=None):
     cols = 3 if predicted_masks else 2

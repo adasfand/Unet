@@ -1,21 +1,15 @@
 from collections import defaultdict
-import copy
+
 import random
 import os
 
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
+
 import cv2
-import matplotlib.pyplot as plt
-import numpy as np
-import ternausnet.models
-from tqdm import tqdm
-import torch
-import torch.backends.cudnn as cudnn
-import torch.nn as nn
-import torch.optim
-from torch.utils.data import Dataset, DataLoader
+
+from torch.utils.data import Dataset
 from utils import *
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 dataset_directory = "oxford-iiit-pet"
 root_directory = os.path.join(dataset_directory)
@@ -98,9 +92,9 @@ def div_dataset():
     random.seed(42)
     random.shuffle(correct_images_filenames)
 
-    train_images_filenames = correct_images_filenames[:7000]
-    val_images_filenames = correct_images_filenames[7000:-1]
-    test_images_filenames = images_filenames[-1:]
+    train_images_filenames = correct_images_filenames[:6000]
+    val_images_filenames = correct_images_filenames[6000:-10]
+    test_images_filenames = images_filenames[-10:]
 
     print(len(train_images_filenames), len(val_images_filenames), len(test_images_filenames))
     return train_images_filenames, val_images_filenames, test_images_filenames

@@ -78,9 +78,7 @@
 #     net = UNet()
 #     print(net(x).shape)
 import torch
-import torchvision
 from torch import nn
-from torch.nn import functional as F
 from torchvision import models
 
 

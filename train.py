@@ -1,8 +1,15 @@
-import cv2
-
 from model import *
 from predict import *
 from show import *
+from torch.utils.data import DataLoader
+import torch.backends.cudnn as cudnn
+import torch.nn as nn
+import numpy as np
+from tqdm import tqdm
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+import copy
+
 cudnn.benchmark = True
 
 # method1
@@ -12,7 +19,7 @@ params = {
     "lr": 0.001,
     "batch_size": 8,
     "num_workers": 0,
-    "epochs": 1,
+    "epochs": 10,
 }
 
 def train(train_loader, model, criterion, optimizer, epoch, params):
@@ -149,13 +156,24 @@ def image_segmentation():
         predicted_masks.append(full_sized_mask)
     image_operation(test_images_filenames, images_directory, masks_directory, predicted_masks)
 
+
 def image_operation(images_filenames, images_directory, masks_directory, predicted_masks):
-    res_image_seg = []
+    # res_image_seg = []
+    import shutil
+    # 清空文件指定文件夹里的文件
+    path = "resImg"
+
+    if not os.path.exists(path):
+        os.mkdir(path)
+    else:
+        shutil.rmtree(path)
+        os.mkdir(path)
+
     for i, image_filename in enumerate(images_filenames):
         image = cv2.imread(os.path.join(images_directory, image_filename))
 
-        mask = cv2.imread(os.path.join(masks_directory, image_filename.replace(".jpg", ".png")), cv2.IMREAD_UNCHANGED, )
-        mask = preprocess_mask(mask)
+        mask = cv2.imread(os.path.join(masks_directory, image_filename.replace(".jpg", ".png")), cv2.IMREAD_UNCHANGED)
+        # mask = preprocess_mask(mask)
 
         predicted_mask = predicted_masks[i]
         # predicted_mask = cv2.cvtColor(predicted_masks[i], cv2.)
@@ -179,17 +197,18 @@ def image_operation(images_filenames, images_directory, masks_directory, predict
 
         res = cv2.merge([b, g, r, newImage])
 
-        res_image_seg.append(res)
-        cv2.imshow("image", image)
-        cv2.imshow("mask", mask)
-        cv2.imshow("predicted_mask", predicted_mask)
-        cv2.imshow("res", res)
 
-        print(predicted_masks[i])
-        cv2.waitKey(0)
-    cv2.destroyAllWindows()
+        # res_image_seg.append(res)
+        # cv2.imshow("image", image)
+        # cv2.imshow("mask", mask)
+        # cv2.imshow("predicted_mask", predicted_mask)
+        # cv2.imshow("res", res)
+        cv2.imwrite("resImg/" + image_filename, res * 255)
+        # print(predicted_masks[i])
+        # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
 
-    return res_image_seg
+    # return res_image_seg
 
 if __name__ == '__main__':
     image_segmentation()
