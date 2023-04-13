@@ -12,15 +12,15 @@ import copy
 
 cudnn.benchmark = True
 
-# method1
 params = {
     "model": "UNet11",
     "device": "cuda",
     "lr": 0.001,
-    "batch_size": 8,
+    "batch_size": 16,
     "num_workers": 0,
-    "epochs": 10,
+    "epochs": 1,
 }
+weight_path = "save/unet.pth"
 
 def train(train_loader, model, criterion, optimizer, epoch, params):
     metric_monitor = MetricMonitor()
@@ -74,6 +74,8 @@ def train_and_validate(model, train_dataset, val_dataset, params):
     for epoch in range(1, params["epochs"] + 1):
         train(train_loader, model, criterion, optimizer, epoch, params)
         validate(val_loader, model, criterion, epoch, params)
+        if epoch % 10 == 0:
+            torch.save(model, weight_path)
     return model
 
 def visualize_augmentations(dataset, idx=0, samples=5):# 可视化
@@ -108,22 +110,22 @@ def define_train_Params(train_images_filenames, val_images_filenames):
     val_transform = A.Compose(
         [A.Resize(256, 256), A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), ToTensorV2()]
     )
-    val_dataset = OxfordPetDataset(val_images_filenames, images_directory, masks_directory, transform=val_transform, )
+    val_dataset = OxfordPetDataset(val_images_filenames, images_directory, masks_directory, transform=val_transform )
     return train_dataset, val_dataset
 
-def train_model():
-    train_images_filenames, val_images_filenames, test_images_filenames = div_dataset()
+def train_model(train_images_filenames, val_images_filenames, test_images_filenames):
     train_dataset, val_dataset = define_train_Params(train_images_filenames, val_images_filenames)
+
     # 修改train_transform
     random.seed(42)
-    # visualize_augmentations(train_dataset, idx=55)
+    visualize_augmentations(train_dataset, idx=55)
 
     model = create_model(params)
     model = train_and_validate(model, train_dataset, val_dataset, params)
-    return model, train_images_filenames, val_images_filenames, test_images_filenames
+    return model
 
-def test_predict():
-    model, train_images_filenames, val_images_filenames, test_images_filenames = train_model()
+def test_predict(train_images_filenames, val_images_filenames, test_images_filenames):
+    model= train_model(train_images_filenames, val_images_filenames, test_images_filenames)
     test_transform = A.Compose(
         [A.Resize(256, 256), A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), ToTensorV2()]
     )
@@ -141,7 +143,13 @@ def test_predict():
     display_image_grid(test_images_filenames, images_directory, masks_directory, predicted_masks=predicted_masks)
 
 def image_segmentation():
-    model, train_images_filenames, val_images_filenames, test_images_filenames = train_model()
+    train_images_filenames, val_images_filenames, test_images_filenames = div_dataset()
+    model = None
+    if os.path.exists(weight_path):
+        model = torch.load(weight_path)
+        print("successfully")
+    else:
+        model = train_model(train_images_filenames, val_images_filenames, test_images_filenames)
     test_transform = A.Compose(
         [A.Resize(256, 256), A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), ToTensorV2()]
     )
@@ -158,7 +166,6 @@ def image_segmentation():
 
 
 def image_operation(images_filenames, images_directory, masks_directory, predicted_masks):
-    # res_image_seg = []
     import shutil
     # 清空文件指定文件夹里的文件
     path = "resImg"
@@ -173,19 +180,12 @@ def image_operation(images_filenames, images_directory, masks_directory, predict
         image = cv2.imread(os.path.join(images_directory, image_filename))
 
         mask = cv2.imread(os.path.join(masks_directory, image_filename.replace(".jpg", ".png")), cv2.IMREAD_UNCHANGED)
-        # mask = preprocess_mask(mask)
+        mask = preprocess_mask(mask)
 
         predicted_mask = predicted_masks[i]
-        # predicted_mask = cv2.cvtColor(predicted_masks[i], cv2.)
-
-        # print(type(image), type(predicted_mask))
-        # print(image.shape, predicted_mask.shape)
-        # print(len(image), len(predicted_mask))
 
         # newImage = cv2.bitwise_and(image, predicted_mask)
         # cv2.imshow("newImage", newImage)
-
-        newImage = np.zeros(image.shape[:2], dtype='uint8')
 
         b, g, r = cv2.split(image)
         for row in range(len(predicted_mask)):
@@ -195,20 +195,21 @@ def image_operation(images_filenames, images_directory, masks_directory, predict
                     g[row][col] = 0
                     r[row][col] = 0
 
-        res = cv2.merge([b, g, r, newImage])
+        res = cv2.merge([b, g, r])
 
-
-        # res_image_seg.append(res)
-        # cv2.imshow("image", image)
+        cv2.imshow("image", image)
         # cv2.imshow("mask", mask)
         # cv2.imshow("predicted_mask", predicted_mask)
-        # cv2.imshow("res", res)
-        cv2.imwrite("resImg/" + image_filename, res * 255)
-        # print(predicted_masks[i])
-        # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
+        cv2.imshow("res", res)
 
-    # return res_image_seg
+        # cv2.bitwise_and()
+
+        res = res[:, :, [0, 1, 2]]
+
+        cv2.imwrite("resImg/" + image_filename, res)
+
+        cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 if __name__ == '__main__':
     image_segmentation()

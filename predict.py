@@ -1,6 +1,3 @@
-from dataset import *
-
-
 import torch
 
 import torch.optim

@@ -96,7 +96,7 @@ def div_dataset():
     val_images_filenames = correct_images_filenames[6000:-10]
     test_images_filenames = images_filenames[-10:]
 
-    print(len(train_images_filenames), len(val_images_filenames), len(test_images_filenames))
+    # print(len(train_images_filenames), len(val_images_filenames), len(test_images_filenames))
     return train_images_filenames, val_images_filenames, test_images_filenames
 
 if __name__ == '__main__':
