@@ -13,14 +13,15 @@ import copy
 cudnn.benchmark = True
 
 params = {
-    "model": "UNet11",
+    "model": "UNet",
     "device": "cuda",
     "lr": 0.001,
-    "batch_size": 16,
+    "batch_size": 8,
     "num_workers": 0,
-    "epochs": 1,
+    "epochs": 10,
 }
-weight_path = "save/unet.pth"
+# batch_size 过大会导致pytorch内存不足，16的batch_size=8，11的batch_size=16
+weight_path = "save/UNet.pth"
 
 def train(train_loader, model, criterion, optimizer, epoch, params):
     metric_monitor = MetricMonitor()

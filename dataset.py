@@ -10,6 +10,7 @@ from torch.utils.data import Dataset
 from utils import *
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+# os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 
 dataset_directory = "oxford-iiit-pet"
 root_directory = os.path.join(dataset_directory)
