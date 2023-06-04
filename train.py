@@ -1,3 +1,6 @@
+import cv2
+import matplotlib.pyplot as plt
+
 from model import *
 from predict import *
 from show import *
@@ -11,39 +14,56 @@ from albumentations.pytorch import ToTensorV2
 import copy
 
 cudnn.benchmark = True
+nets = ["UNet", "UNet11", "UNet16", "LinkNet34", "AlbuNet"]
+use_net = nets[0]
 
 params = {
-    "model": "UNet",
+    "model": use_net,
     "device": "cuda",
     "lr": 0.001,
     "batch_size": 8,
     "num_workers": 0,
-    "epochs": 10,
+    "epochs": 30,
 }
 # batch_size 过大会导致pytorch内存不足，16的batch_size=8，11的batch_size=16
-weight_path = "save/UNet.pth"
+weight_path = "save/" + use_net + ".pth"
+loss_path = "save/loss/" + use_net + ".txt"
+loss_train_item = []
+loss_validate_item = []
+
 
 def train(train_loader, model, criterion, optimizer, epoch, params):
     metric_monitor = MetricMonitor()
     model.train()
     stream = tqdm(train_loader)
+    sum_loss = 0
+    size = 0
     for i, (images, target) in enumerate(stream, start=1):
         images = images.to(params["device"], non_blocking=True)
         target = target.to(params["device"], non_blocking=True)
         output = model(images).squeeze(1)
         loss = criterion(output, target)
         metric_monitor.update("Loss", loss.item())
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+
+        # loss_item.append()
+        sum_loss += round(metric_monitor.metrics["Loss"]["avg"] + 0.005, 2)
         stream.set_description(
             "Epoch: {epoch}. Train.      {metric_monitor}".format(epoch=epoch, metric_monitor=metric_monitor)
         )
+        size = i
+    loss_train_item.append(round(sum_loss / size, 2))
+
 
 def validate(val_loader, model, criterion, epoch, params):
     metric_monitor = MetricMonitor()
     model.eval()
     stream = tqdm(val_loader)
+    sum_loss = 0
+    size = 0
     with torch.no_grad():
         for i, (images, target) in enumerate(stream, start=1):
             images = images.to(params["device"], non_blocking=True)
@@ -51,9 +71,15 @@ def validate(val_loader, model, criterion, epoch, params):
             output = model(images).squeeze(1)
             loss = criterion(output, target)
             metric_monitor.update("Loss", loss.item())
+
+            sum_loss += round(metric_monitor.metrics["Loss"]["avg"] + 0.005, 2)
+
             stream.set_description(
                 "Epoch: {epoch}. Validation. {metric_monitor}".format(epoch=epoch, metric_monitor=metric_monitor)
             )
+            size = i
+    loss_validate_item.append(round(sum_loss / size, 2))
+
 
 def train_and_validate(model, train_dataset, val_dataset, params):
     train_loader = DataLoader(
@@ -79,7 +105,8 @@ def train_and_validate(model, train_dataset, val_dataset, params):
             torch.save(model, weight_path)
     return model
 
-def visualize_augmentations(dataset, idx=0, samples=5):# 可视化
+
+def visualize_augmentations(dataset, idx=0, samples=5):  # 可视化
     dataset = copy.deepcopy(dataset)
     dataset.transform = A.Compose([t for t in dataset.transform if not isinstance(t, (A.Normalize, ToTensorV2))])
     figure, ax = plt.subplots(nrows=samples, ncols=2, figsize=(10, 24))
@@ -93,6 +120,7 @@ def visualize_augmentations(dataset, idx=0, samples=5):# 可视化
         ax[i, 1].set_axis_off()
     plt.tight_layout()
     plt.show()
+
 
 def define_train_Params(train_images_filenames, val_images_filenames):
     train_transform = A.Compose(
@@ -111,22 +139,35 @@ def define_train_Params(train_images_filenames, val_images_filenames):
     val_transform = A.Compose(
         [A.Resize(256, 256), A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), ToTensorV2()]
     )
-    val_dataset = OxfordPetDataset(val_images_filenames, images_directory, masks_directory, transform=val_transform )
+    val_dataset = OxfordPetDataset(val_images_filenames, images_directory, masks_directory, transform=val_transform)
     return train_dataset, val_dataset
+
 
 def train_model(train_images_filenames, val_images_filenames, test_images_filenames):
     train_dataset, val_dataset = define_train_Params(train_images_filenames, val_images_filenames)
 
     # 修改train_transform
     random.seed(42)
-    visualize_augmentations(train_dataset, idx=55)
+    # visualize_augmentations(train_dataset, idx=55)
 
     model = create_model(params)
     model = train_and_validate(model, train_dataset, val_dataset, params)
+
+    f = open(loss_path, "a")
+    # a->追加读写
+
+    f.write("train : " + str(loss_train_item) + "\n")
+    f.write("validate : " + str(loss_validate_item) + "\n")
+
+    f.close()
+
     return model
 
+
+# 没用
 def test_predict(train_images_filenames, val_images_filenames, test_images_filenames):
-    model= train_model(train_images_filenames, val_images_filenames, test_images_filenames)
+    # 仅用来测试predict
+    model = train_model(train_images_filenames, val_images_filenames, test_images_filenames)
     test_transform = A.Compose(
         [A.Resize(256, 256), A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), ToTensorV2()]
     )
@@ -139,9 +180,10 @@ def test_predict(train_images_filenames, val_images_filenames, test_images_filen
             predicted_256x256_mask, height=original_height, width=original_width, interpolation=cv2.INTER_NEAREST
         )
         predicted_masks.append(full_sized_mask)
-    # print(len(predicted_masks))
+    print(len(predicted_masks))
 
     display_image_grid(test_images_filenames, images_directory, masks_directory, predicted_masks=predicted_masks)
+
 
 def image_segmentation():
     train_images_filenames, val_images_filenames, test_images_filenames = div_dataset()
@@ -163,20 +205,36 @@ def image_segmentation():
             predicted_256x256_mask, height=original_height, width=original_width, interpolation=cv2.INTER_NEAREST
         )
         predicted_masks.append(full_sized_mask)
+
     image_operation(test_images_filenames, images_directory, masks_directory, predicted_masks)
+
+
+# 统计iou使用的
+def get_binary_white(image):
+    sum = 0
+    h, w = image.shape[0], image.shape[1]
+    for i in range(h):
+        for j in range(w):
+            if image[i][j] == 1:
+                sum += 1
+    return sum
 
 
 def image_operation(images_filenames, images_directory, masks_directory, predicted_masks):
     import shutil
     # 清空文件指定文件夹里的文件
-    path = "resImg"
+    path = "resImg/" + use_net
 
-    if not os.path.exists(path):
-        os.mkdir(path)
-    else:
-        shutil.rmtree(path)
-        os.mkdir(path)
+    # if not os.path.exists(path):
+    #     os.mkdir(path)
+    # else:
+    #     shutil.rmtree(path)
+    #     os.mkdir(path)
 
+
+    # Ious = []
+    # Dice = []
+    res_big_image = []
     for i, image_filename in enumerate(images_filenames):
         image = cv2.imread(os.path.join(images_directory, image_filename))
 
@@ -198,19 +256,61 @@ def image_operation(images_filenames, images_directory, masks_directory, predict
 
         res = cv2.merge([b, g, r])
 
-        cv2.imshow("image", image)
+        # cv2.imshow("image", image)
         # cv2.imshow("mask", mask)
         # cv2.imshow("predicted_mask", predicted_mask)
-        cv2.imshow("res", res)
+        # cv2.imshow("res", res)
 
-        # cv2.bitwise_and()
+        res_big_image.append(image)
+        res_big_image.append(mask)
+        res_big_image.append(predicted_mask)
+        res_big_image.append(res)
 
-        res = res[:, :, [0, 1, 2]]
+        figure, ax = plt.subplots(nrows=1, ncols=4, figsize=(18, 10))
+        ax.ravel()[0].imshow(image[:, :, [2, 1, 0]])
+        ax.ravel()[0].set_title("(a)")
+        ax.ravel()[1].imshow(mask)
+        ax.ravel()[1].set_title("(b)")
+        ax.ravel()[2].imshow(predicted_mask)
+        ax.ravel()[2].set_title("(c)")
+        ax.ravel()[3].imshow(res[:, :, [2, 1, 0]])
+        ax.ravel()[3].set_title("(d)")
+        plt.tight_layout()
+        plt.savefig("./"+path+"/"+ image_filename)
+        plt.show()
 
-        cv2.imwrite("resImg/" + image_filename, res)
+        # print(predicted_mask/mask)
 
-        cv2.waitKey(0)
-    cv2.destroyAllWindows()
+        # intersection = cv2.bitwise_and(mask, predicted_mask)
+        # print(len(intersection))
+        # cv2.imshow("intersection", intersection)
+
+        # union = cv2.bitwise_or(mask, predicted_mask)
+        # print(len(union))
+        # cv2.imshow("union", union)
+
+        # Ious.append(get_binary_white(intersection) / get_binary_white(union))
+
+        # Dice.append(2 * get_binary_white(intersection) / (get_binary_white(predicted_mask) + get_binary_white(mask)))
+
+        # res = res[:, :, [0, 1, 2]]
+
+        # cv2.imwrite("resImg/" + image_filename, res)
+
+    #     cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    # avg_iou = 0
+    # avg_dice = 0
+    # for i in Ious:
+    #     avg_iou += i
+    # for i in Dice:
+    #     avg_dice += i
+    # avg_iou /= len(Ious)
+    # avg_dice /= len(Dice)
+    # # print(avg_iou)
+    # print(avg_dice)
+
 
 if __name__ == '__main__':
     image_segmentation()

@@ -42,6 +42,32 @@ class DecoderBlock(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.block(x)
 
+class DecoderBlock(nn.Module):
+    """
+    Paramaters for Deconvolution were chosen to avoid artifacts, following
+    link https://distill.pub/2016/deconv-checkerboard/
+    """
+
+    def __init__(self, in_channels, middle_channels, out_channels, is_deconv=True):
+        super(DecoderBlock, self).__init__()
+        self.in_channels = in_channels
+
+        if is_deconv:
+            self.block = nn.Sequential(
+                ConvRelu(in_channels, middle_channels),
+                nn.ConvTranspose2d(middle_channels, out_channels, kernel_size=4, stride=2,
+                                   padding=1),
+                nn.ReLU(inplace=True)
+            )
+        else:
+            self.block = nn.Sequential(
+                nn.Upsample(scale_factor=2, mode='bilinear'),
+                ConvRelu(in_channels, middle_channels),
+                ConvRelu(middle_channels, out_channels),
+            )
+
+    def forward(self, x):
+        return self.block(x)
 
 class UNet11(nn.Module):
     # TernausNet11
@@ -169,7 +195,6 @@ class DecoderBlockV2(nn.Module):
 
 
 class UNet16(nn.Module):
-    # TernausNet - 16
     def __init__(
         self,
         num_classes: int = 1,
